@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>몸무게 기록 그래프</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: #F2F5F9;
+    font-family: 'Malgun Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #222;
+  }
+  .container { max-width: 520px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 1.9rem; margin: 8px 0 20px; }
+  section {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  h2 { font-size: 1.2rem; margin: 0 0 14px; }
+  label { display: block; font-size: 1.05rem; font-weight: bold; margin-bottom: 6px; }
+  input {
+    width: 100%;
+    font-size: 1.2rem;
+    padding: 14px;
+    border: 2px solid #DDE3EA;
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+  input:focus { outline: none; border-color: #4A90E2; }
+  button {
+    width: 100%;
+    font-size: 1.2rem;
+    font-weight: bold;
+    padding: 16px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  #addBtn { background: #4A90E2; color: #fff; }
+  #addBtn:active { background: #3A7BC8; }
+  #resetBtn { background: #fff; color: #E24A4A; border: 2px solid #E24A4A; margin-top: 4px; }
+  #resetBtn:active { background: #FBECEC; }
+  .stats-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .stat-box { flex: 1 1 130px; background: #F7FAFF; border-radius: 10px; padding: 16px 10px; text-align: center; }
+  .stat-box .label { font-size: 0.95rem; color: #777; margin-bottom: 6px; }
+  .stat-box .value { font-size: 1.4rem; font-weight: bold; color: #2C5FA8; }
+  .stat-box .value.up { color: #E24A4A; }
+  .stat-box .value.down { color: #2E9E5B; }
+  canvas { max-width: 100%; }
+  .record-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 4px;
+    border-bottom: 1px solid #EEE;
+    font-size: 1.1rem;
+  }
+  .record-row:last-child { border-bottom: none; }
+  .record-date { color: #777; font-size: 1rem; white-space: nowrap; }
+  .record-value { font-weight: bold; flex: 1; text-align: right; margin-right: 10px; }
+  .delete-btn {
+    width: auto; flex-shrink: 0;
+    background: #F5F5F5; color: #E24A4A;
+    font-size: 0.95rem; padding: 8px 12px; border-radius: 8px;
+  }
+  .delete-btn:active { background: #FBECEC; }
+  #emptyMsg, #chartEmptyMsg { text-align: center; color: #999; font-size: 1rem; padding: 10px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>⚖️ 몸무게 기록 그래프</h1>
+
+  <section>
+    <h2>1. 오늘 기록 추가하기</h2>
+    <label for="dateInput">날짜</label>
+    <input id="dateInput" type="date">
+    <label for="valueInput">몸무게 (kg)</label>
+    <input id="valueInput" type="number" step="0.1" inputmode="decimal" placeholder="예: 65.5">
+    <button id="addBtn">+ 추가하기</button>
+  </section>
+
+  <section>
+    <h2>2. 이번 주 요약</h2>
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="label">이번 주 평균</div>
+        <div class="value" id="thisWeekAvg">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">지난주 대비</div>
+        <div class="value" id="weekChange">—</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. 변화 그래프</h2>
+    <canvas id="chart" height="220"></canvas>
+    <p id="chartEmptyMsg">기록을 추가하면 그래프가 여기 나와요.</p>
+  </section>
+
+  <section>
+    <h2>4. 전체 기록</h2>
+    <div id="recordList"></div>
+    <p id="emptyMsg">아직 기록이 없어요.</p>
+  </section>
+
+  <button id="resetBtn">전체 기록 지우기</button>
+</div>
+
+<script>
+  const dateInput = document.getElementById('dateInput');
+  const valueInput = document.getElementById('valueInput');
+  const addBtn = document.getElementById('addBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const recordList = document.getElementById('recordList');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const chartEmptyMsg = document.getElementById('chartEmptyMsg');
+  const thisWeekAvgEl = document.getElementById('thisWeekAvg');
+  const weekChangeEl = document.getElementById('weekChange');
+  const canvas = document.getElementById('chart');
+
+  const 저장키 = '몸무게기록_v1';
+  let records = JSON.parse(localStorage.getItem(저장키) || '[]');
+  let chart = null;
+
+  // 오늘 날짜를 기본값으로
+  dateInput.value = new Date().toLocaleDateString('sv-SE');
+
+  function 저장() {
+    localStorage.setItem(저장키, JSON.stringify(records));
+  }
+
+  function 정렬된기록() {
+    return [...records].sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  addBtn.addEventListener('click', () => {
+    const date = dateInput.value;
+    const value = parseFloat(valueInput.value);
+
+    if (!date) { alert('날짜를 선택해주세요.'); return; }
+    if (isNaN(value) || value <= 0) { alert('몸무게를 올바르게 입력해주세요.'); valueInput.focus(); return; }
+
+    const 기존 = records.find(r => r.date === date);
+    if (기존) {
+      기존.value = value;
+    } else {
+      records.push({ date, value });
+    }
+    valueInput.value = '';
+    저장();
+    render();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    if (records.length === 0) return;
+    if (confirm('모든 기록을 지울까요? 되돌릴 수 없어요.')) {
+      records = [];
+      저장();
+      render();
+    }
+  });
+
+  function deleteRecord(date) {
+    records = records.filter(r => r.date !== date);
+    저장();
+    render();
+  }
+
+  function formatDate(d) {
+    const [y, m, day] = d.split('-');
+    return `${m}/${day}`;
+  }
+
+  function render() {
+    renderList();
+    renderStats();
+    renderChart();
+  }
+
+  function renderList() {
+    const 정렬 = [...정렬된기록()].reverse(); // 최신이 위로
+    recordList.innerHTML = '';
+    emptyMsg.style.display = 정렬.length === 0 ? 'block' : 'none';
+
+    정렬.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'record-row';
+      row.innerHTML = `
+        <span class="record-date">${r.date}</span>
+        <span class="record-value">${r.value.toFixed(1)} kg</span>
+        <button class="delete-btn" data-date="${r.date}">삭제</button>
+      `;
+      recordList.appendChild(row);
+    });
+    recordList.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => deleteRecord(btn.dataset.date));
+    });
+  }
+
+  // 이번 주(월~일) 시작일을 반환
+  function 주시작일(기준날짜) {
+    const d = new Date(기준날짜);
+    const 요일 = (d.getDay() + 6) % 7; // 월요일=0 ~ 일요일=6
+    d.setDate(d.getDate() - 요일);
+    return d;
+  }
+
+  function toKey(d) {
+    return d.toLocaleDateString('sv-SE');
+  }
+
+  function 평균구하기(시작, 끝) {
+    const 대상 = records.filter(r => r.date >= 시작 && r.date <= 끝);
+    if (대상.length === 0) return null;
+    const 합 = 대상.reduce((s, r) => s + r.value, 0);
+    return 합 / 대상.length;
+  }
+
+  function renderStats() {
+    const 오늘 = new Date();
+    const 이번주시작 = 주시작일(오늘);
+    const 이번주끝 = new Date(이번주시작); 이번주끝.setDate(이번주끝.getDate() + 6);
+    const 지난주시작 = new Date(이번주시작); 지난주시작.setDate(지난주시작.getDate() - 7);
+    const 지난주끝 = new Date(이번주시작); 지난주끝.setDate(지난주끝.getDate() - 1);
+
+    const 이번주평균 = 평균구하기(toKey(이번주시작), toKey(이번주끝));
+    const 지난주평균 = 평균구하기(toKey(지난주시작), toKey(지난주끝));
+
+    thisWeekAvgEl.textContent = 이번주평균 === null ? '기록 없음' : `${이번주평균.toFixed(1)} kg`;
+
+    if (이번주평균 === null || 지난주평균 === null) {
+      weekChangeEl.textContent = '비교 불가';
+      weekChangeEl.className = 'value';
+    } else {
+      const 차이 = 이번주평균 - 지난주평균;
+      const 부호 = 차이 > 0 ? '+' : '';
+      weekChangeEl.textContent = `${부호}${차이.toFixed(1)} kg ${차이 > 0 ? '▲' : (차이 < 0 ? '▼' : '-')}`;
+      weekChangeEl.className = 'value ' + (차이 > 0 ? 'up' : (차이 < 0 ? 'down' : ''));
+    }
+  }
+
+  function renderChart() {
+    const 정렬 = 정렬된기록();
+    chartEmptyMsg.style.display = 정렬.length === 0 ? 'block' : 'none';
+    canvas.style.display = 정렬.length === 0 ? 'none' : 'block';
+    if (정렬.length === 0) {
+      if (chart) { chart.destroy(); chart = null; }
+      return;
+    }
+
+    const labels = 정렬.map(r => formatDate(r.date));
+    const data = 정렬.map(r => r.value);
+
+    if (chart) {
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = data;
+      chart.update();
+      return;
+    }
+
+    chart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '몸무게 (kg)',
+          data: data,
+          borderColor: '#4A90E2',
+          backgroundColor: 'rgba(74, 144, 226, 0.15)',
+          borderWidth: 3,
+          pointRadius: 4,
+          pointBackgroundColor: '#4A90E2',
+          tension: 0.25,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { font: { size: 13 } } },
+          x: { ticks: { font: { size: 12 } } }
+        }
+      }
+    });
+  }
+
+  render();
+</script>
+</body>
+</html>
