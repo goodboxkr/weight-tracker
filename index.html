@@ -100,7 +100,8 @@
   .cp-side iframe{display:block;}
   .cp-side .cp-note{font-size:10px;color:#999;text-align:center;margin-top:4px;line-height:1.4;}
   @media (max-width: 1180px){.cp-side{display:none;}}
-  .cp-bottom{max-width:728px;margin:20px auto 0;overflow:hidden;}
+  .cp-bottom{max-width:728px;margin:20px auto 0;}
+  .cp-bottom-frame{overflow:hidden;}
   .cp-bottom-inner{transform-origin:top left;}
   .cp-bottom .cp-note{font-size:11px;color:#999;text-align:center;margin-top:6px;}
 </style>
@@ -150,7 +151,7 @@
   <button id="resetBtn">전체 기록 지우기</button>
 
   <div class="cp-bottom">
-    <div class="cp-bottom-inner" style="width:728px;height:90px;"><iframe src="https://ads-partners.coupang.com/widgets.html?id=1026272&template=banner&trackingCode=AF4842061&subId=&width=728&height=90" width="728" height="90" frameborder="0" scrolling="no" referrerpolicy="unsafe-url"></iframe></div>
+    <div class="cp-bottom-frame"><div class="cp-bottom-inner" style="width:728px;height:90px;"><iframe src="https://ads-partners.coupang.com/widgets.html?id=1026272&template=banner&trackingCode=AF4842061&subId=&width=728&height=90" width="728" height="90" frameborder="0" scrolling="no" referrerpolicy="unsafe-url"></iframe></div></div>
     <div class="cp-note">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다</div>
   </div>
 </div>
@@ -159,10 +160,11 @@
 (function(){
   function fit(){
     document.querySelectorAll('.cp-bottom').forEach(function(box){
+      var frame = box.querySelector('.cp-bottom-frame');
       var inner = box.querySelector('.cp-bottom-inner');
       var ratio = Math.min(1, box.clientWidth/728);
       inner.style.transform = 'scale('+ratio+')';
-      box.style.height = (90*ratio)+'px';
+      frame.style.height = (90*ratio)+'px';
     });
   }
   window.addEventListener('resize', fit);
